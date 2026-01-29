@@ -21,6 +21,16 @@ export class TelegramController {
       return { ok: true };
     }
 
+    const message = update?.message;
+    if (message?.text?.startsWith("/start")) {
+      const chatId = message?.chat?.id;
+      if (!chatId) return { ok: true };
+      const from = message?.from || {};
+      const name = from?.first_name || from?.username || "there";
+      await this.sendWelcome(chatId, name);
+      return { ok: true };
+    }
+
     const callback = update?.callback_query;
     if (!callback) return { ok: true };
 
@@ -87,6 +97,57 @@ export class TelegramController {
         text,
         parse_mode: "HTML",
         reply_markup: { inline_keyboard: [] },
+      }),
+    });
+  }
+
+  private escapeHtml(value: string) {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  private async sendWelcome(chatId: string | number, name: string) {
+    const botToken = this.config.get<string>("TELEGRAM_BOT_TOKEN");
+    if (!botToken || !chatId) return;
+
+    const safeName = this.escapeHtml(String(name || "there"));
+    const webAppUrl = this.config.get<string>("TELEGRAM_WEBAPP_URL") || "https://app.fundory.cc";
+    const communityUrl = this.config.get<string>("TELEGRAM_COMMUNITY_URL") || "https://t.me/fundory";
+    const supportUrl = this.config.get<string>("TELEGRAM_SUPPORT_URL") || "https://t.me/fundory_support";
+
+    const text = [
+      `🚀 Welcome to Fundory, ${safeName}!`,
+      "Your gateway to automated passive income is now open.",
+      "",
+      "How to start:",
+      "1️⃣ Deposit: Get your personal TRC20 address.",
+      "2️⃣ Stake: Choose your term and start earning up to 1% daily.",
+      "3️⃣ Grow: Use compound interest to accelerate your wealth.",
+      "",
+      "💰 Your current status: Tier 0 (0.25% daily)",
+      "Tap the button below to launch the app and make your first move!",
+    ].join("\n");
+
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🚀 Launch Fundory App", web_app: { url: webAppUrl } }],
+            [
+              { text: "📢 Join Community", url: communityUrl },
+              { text: "🛠 Support", url: supportUrl },
+            ],
+          ],
+        },
       }),
     });
   }
