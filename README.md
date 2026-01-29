@@ -72,6 +72,18 @@ Set these before deploying:
 - Enhanced activity feed + analytics
 - More tiers and flexible boost rules
 
+## Problems solved
+- Telegram WebView embedding: fixed `X-Frame-Options`, CSP and WebApp loading issues
+- Devtools crashes in WebView: disabled Vue/Nuxt/Router devtools and SSR to avoid `__vrv_devtools` errors
+- CORS: dynamic origin whitelist for Telegram + local dev, reduced blocked API calls
+- Accrual duplicates: unique index per deposit/day + dedupe checks + safe concurrency handling
+- Referral bonus mismatch: unified percent tiers and turnover updates across scanner and deposits
+- Profit‑only withdrawals: separate locked principal vs. withdrawable profit
+- Staking timing: payouts count from activation time, not deposit time
+- UI/UX glitches: consistent progress bars, timers, empty states, and modals
+- Performance: cached API responses and reduced animation/timer overhead
+- Environment stability: handled `EADDRINUSE` and process restarts
+
 ## More docs
 - `backend/README.md`
 - `telegram-app/README.md`
