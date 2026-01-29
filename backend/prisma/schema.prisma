@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum WalletType {
+  deposit_wallet
+  master_wallet
+}
+
+enum DepositStatus {
+  active
+  completed
+  canceled
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAW
+  ACCRUAL
+  REFERRAL_BONUS
+  SWAP
+  TIER_BOOST
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum SystemTransferType {
+  GAS_TOPUP
+  SWEEP
+}
+
+enum SystemTransferStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum AccrualType {
+  interest
+  referral
+}
+
+model User {
+  id                String    @id @default(cuid())
+  telegramId        String    @unique
+  username          String?
+  firstName         String?
+  lastName          String?
+  language          String    @default("ru")
+  notifyDailyProfit Boolean   @default(true)
+  notifyDeposit     Boolean   @default(true)
+  notifyWithdraw    Boolean   @default(true)
+  autoReinvest      Boolean   @default(false)
+  mainBalance       Decimal   @default(0)
+  stakedBalance     Decimal   @default(0)
+  furBalance        Decimal   @default(0)
+  furPending        Decimal   @default(0)
+  personalDepositSum Decimal  @default(0)
+  teamTurnoverSum   Decimal   @default(0)
+  totalTurnover     Decimal   @default(0)
+  currentTier       Int       @default(0)
+  tierBoostTier     Int?
+  tierBoostUntil    DateTime?
+  referralBonusGranted Boolean @default(false)
+  refCode           String    @unique
+  referrerId        String?
+  referrer          User?     @relation("Referrals", fields: [referrerId], references: [id])
+  referrals         User[]    @relation("Referrals")
+  // legacy balance fields removed in favor of mainBalance/furBalance
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  wallets           Wallet[]
+  deposits          Deposit[]
+  transactions      Transaction[]
+  accruals          Accrual[]
+  balanceSnapshots  BalanceSnapshot[]
+  referralsLinks    Referral[] @relation("ReferrerLinks")
+  referredByLinks   Referral[] @relation("ReferredLinks")
+  payoutAddresses   PayoutAddress[]
+  systemTransfers   SystemTransfer[]
+
+  @@index([referrerId])
+  @@index([teamTurnoverSum])
+  @@index([totalTurnover])
+}
+
+model Wallet {
+  id          String    @id @default(cuid())
+  userId      String
+  address     String    @unique
+  privateKey  String
+  type        WalletType @default(deposit_wallet)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+  systemTransfers SystemTransfer[]
+}
+
+model Tariff {
+  id             String    @id @default(cuid())
+  name           String
+  description    String
+  monthlyPercent Decimal
+  accrualPeriod  String    @default("day")
+  minDeposit     Decimal
+  maxDeposit     Decimal?
+  termDays       Int?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  deposits       Deposit[]
+}
+
+model Deposit {
+  id          String        @id @default(cuid())
+  userId      String
+  tariffId    String
+  amount      Decimal
+  startDate   DateTime      @default(now())
+  endDate     DateTime?
+  stakeDurationDays Int?
+  stakeActivatedAt DateTime?
+  autoReinvest Boolean @default(true)
+  status      DepositStatus @default(active)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id])
+  tariff      Tariff        @relation(fields: [tariffId], references: [id])
+  accruals    Accrual[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([userId, status])
+}
+
+model Transaction {
+  id         String            @id @default(cuid())
+  userId     String
+  type       TransactionType
+  amount     Decimal
+  currency   String            @default("USDT_TRX")
+  txHash     String?           @unique
+  status     TransactionStatus @default(PENDING)
+  meta       Json?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  user       User              @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId, type, status])
+}
+
+model SystemTransfer {
+  id           String               @id @default(cuid())
+  walletId     String?
+  userId       String?
+  type         SystemTransferType
+  status       SystemTransferStatus @default(PENDING)
+  amount       Decimal
+  currency     String               @default("USDT")
+  txHash       String?
+  fromAddress  String?
+  toAddress    String?
+  nextRetryAt  DateTime?
+  attempts     Int                  @default(0)
+  meta         Json?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  wallet       Wallet?              @relation(fields: [walletId], references: [id])
+  user         User?                @relation(fields: [userId], references: [id])
+
+  @@index([walletId, type, status])
+  @@index([nextRetryAt])
+}
+
+model Accrual {
+  id        String      @id @default(cuid())
+  depositId String
+  userId    String
+  amount    Decimal
+  date      DateTime    @default(now())
+  type      AccrualType @default(interest)
+  createdAt DateTime    @default(now())
+
+  user      User        @relation(fields: [userId], references: [id])
+  deposit   Deposit     @relation(fields: [depositId], references: [id])
+
+  @@index([userId])
+  @@index([depositId])
+  @@index([date])
+  @@index([userId, date])
+  @@unique([depositId, date])
+}
+
+model BalanceSnapshot {
+  id           String   @id @default(cuid())
+  userId       String
+  totalBalance Decimal
+  date         DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, date])
+}
+
+model Referral {
+  id          String   @id @default(cuid())
+  referrerId  String
+  referredId  String
+  hasDeposit  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  referrer    User     @relation("ReferrerLinks", fields: [referrerId], references: [id])
+  referred    User     @relation("ReferredLinks", fields: [referredId], references: [id])
+
+  @@unique([referrerId, referredId])
+  @@index([referrerId])
+  @@index([referredId])
+  @@index([hasDeposit])
+  @@index([referrerId, hasDeposit])
+}
+
+model PayoutAddress {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String?
+  address   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
