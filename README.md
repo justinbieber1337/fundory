@@ -66,6 +66,7 @@ Set these before deploying:
 - Never commit real secrets to GitHub
 - Rotate tokens before production
 - Use separate prod and dev databases
+- Telegram TMA auth: validate `initData` signature server‑side to prevent forgery
 
 ## Roadmap
 - Admin dashboard for payouts and audits
